@@ -5,5 +5,5 @@ MarkupSafe==0.19
 Werkzeug==0.9.4
 httplib2==0.8
 itsdangerous==0.24
-oauth2==1.5.211
+oauth2==1.9.0.post1
 wsgiref==0.1.2
