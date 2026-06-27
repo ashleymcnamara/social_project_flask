@@ -1,59 +1,53 @@
-from flask import Flask
-from flask_oauth import OAuth
-from flask import redirect, session, url_for, request, flash
-import os 
+from flask import Flask, redirect, session, url_for, request, flash
+from authlib.integrations.flask_client import OAuth
+import os
 
 app = Flask(__name__)
 
-oauth = OAuth()
-twitter = oauth.remote_app('twitter',
-    base_url='https://api.twitter.com/1/',
+app.config.update(
+    DEBUG=True,
+    SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-secret-key'),
+)
+
+oauth = OAuth(app)
+twitter = oauth.register(
+    name='twitter',
+    api_base_url='https://api.twitter.com/2/',
     request_token_url='https://api.twitter.com/oauth/request_token',
     access_token_url='https://api.twitter.com/oauth/access_token',
     authorize_url='https://api.twitter.com/oauth/authenticate',
-    consumer_key= os.environ.get('TWITTER_CONSUMER_KEY'),
-    consumer_secret= os.environ.get('TWITTER_CONSUMER_SECRET'),
+    client_id=os.environ.get('TWITTER_CONSUMER_KEY'),
+    client_secret=os.environ.get('TWITTER_CONSUMER_SECRET'),
 )
-
-app.config.update(
-    DEBUG=True,
-    SECRET_KEY= os.environ.get('SECRET_KEY'),
-)
-
-@twitter.tokengetter
-def get_twitter_token(token=None):
-    return session.get('twitter_token')
 
 
 @app.route('/login')
 def login():
-    return twitter.authorize(callback=url_for('oauth_authorized',
-        next=request.args.get('next') or request.referrer or None))
+    redirect_uri = url_for('oauth_authorized', _external=True)
+    return twitter.authorize_redirect(redirect_uri)
+
 
 @app.route('/oauth-authorized')
-@twitter.authorized_handler
-def oauth_authorized(resp):
+def oauth_authorized():
     next_url = request.args.get('next') or url_for('hello_world')
-    if resp is None:
-        flash(u'You denied the request to sign in.')
+    token = twitter.authorize_access_token()
+    if token is None:
+        flash('You denied the request to sign in.')
         return redirect(next_url)
 
-    session['twitter_token'] = (
-        resp['oauth_token'],
-        resp['oauth_token_secret']
-    )
-    session['twitter_user'] = resp['screen_name']
+    session['twitter_token'] = token
+    resp = twitter.get('users/me')
+    user_info = resp.json()
+    session['twitter_user'] = user_info.get('data', {}).get('username', 'unknown')
 
-    flash('You were signed in as %s' % resp['screen_name'])
+    flash('You were signed in as %s' % session['twitter_user'])
     return redirect(next_url)
+
 
 @app.route('/')
 def hello_world():
     return 'Hello World!'
 
-# @app.route('/list/')
-# def list():
-# 	return 'test'
 
 if __name__ == '__main__':
     app.run()
